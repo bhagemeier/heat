@@ -1,0 +1,46 @@
+name: GPU Testing
+
+on: push
+
+jobs:
+  submit-gpu-tests:
+    name: Submit GPU test batch job
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        processes: [1, 2, 3]
+        gpus: [1, 2, 3, 4]
+        exclude:
+          - processes: 2
+            gpus: 1
+          - processes: 2
+            gpus: 2
+          - processes: 2
+            gpus: 3
+          - processes: 3
+            gpus: 1
+          - processes: 3
+            gpus: 2
+          - processes: 3
+            gpus: 3
+    steps:
+      - uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HDFML_HOST }}
+          username: ${{ secrets.HDFML_NAME }}
+          key: ${{ secrets.HDFML_KEY }}
+          envs: GITHUB_SHA
+          script: |
+            cd tmp
+            cd  heat
+            git fetch
+            git checkout $GITHUB_SHA
+            FILENAME=test_batch_script_${{ matrix.processes }}_${{ matrix.gpus }}.sh
+            {
+              echo -n -e "#!/bin/bash -x\n";
+              echo -n -e "#SBATCH --account=haf --nodes=2 --ntasks-per-node=1 --cpus-per-task=1 --time=00:05:00 --gres=gpu:${{ matrix.gpus }}\n";
+              cat .github/workflows/gpu_test_template.sh;
+            } > $FILENAME
+            cat $FILENAME
+            export SHA=$GITHUB_SHA
+            sbatch $FILENAME ${{ matrix.processes }} ${{ matrix.gpus }}
